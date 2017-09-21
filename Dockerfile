@@ -1,43 +1,59 @@
 FROM alpine:3.6
 
-LABEL maintainer streeven
+MAINTAINER koolay
 
-ENV SHADOWSOCKS_VERSION v3.1.0
+ARG SS_VER=3.1.0
+ARG SS_URL=https://github.com/shadowsocks/shadowsocks-libev/releases/download/v$SS_VER/shadowsocks-libev-$SS_VER.tar.gz
 
-RUN set -ex \
- && BUILD_DIR='/build' \
- && apk add --no-cache \
-        libcrypto1.0 \
-        libev \
-        libsodium \
-        mbedtls \
-        pcre \
-        udns \
- && apk add --no-cache --virtual BUILD_DEPS \
-        autoconf \
-        automake \
-        build-base \
-        curl \
-        gettext-dev \
-        git \
-        libev-dev \
-        libsodium-dev \
-        libtool \
-        linux-headers \
-        mbedtls-dev \
-        openssl-dev \
-        pcre-dev \
-        tar \
-        udns-dev \
- && git clone --recursive https://github.com/shadowsocks/shadowsocks-libev $BUILD_DIR \
- && cd $BUILD_DIR \
- && git checkout -b specific_version $SHADOWSOCKS_VERSION \
-    && ./autogen.sh \
-    && ./configure --disable-documentation \
-    && make install \
- && cd .. \
- && rm -rf $BUILD_DIR \
- && apk del BUILD_DEPS
+ENV SERVER_ADDR 0.0.0.0
+ENV SERVER_PORT 8388
+ENV PASSWORD=
+ENV METHOD      aes-256-cfb
+ENV TIMEOUT     300
+ENV DNS_ADDR    8.8.8.8
+ENV DNS_ADDR_2  8.8.4.4
+ENV ARGS=
 
-EXPOSE 8388/tcp
-EXPOSE 8388/udp
+RUN set -ex && \
+    apk add --no-cache --virtual .build-deps \
+                                autoconf \
+                                build-base \
+                                curl \
+                                libev-dev \
+                                libtool \
+                                linux-headers \
+                                libsodium-dev \
+                                mbedtls-dev \
+                                pcre-dev \
+                                tar \
+                                c-ares-dev && \
+    cd /tmp && \
+    curl -sSL $SS_URL | tar xz --strip 1 && \
+    ./configure --prefix=/usr --disable-documentation && \
+    make install && \
+    cd .. && \
+
+    runDeps="$( \
+        scanelf --needed --nobanner /usr/bin/ss-* \
+            | awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }' \
+            | xargs -r apk info --installed \
+            | sort -u \
+    )" && \
+    apk add --no-cache --virtual .run-deps $runDeps && \
+    apk del .build-deps && \
+    rm -rf /tmp/*
+
+USER nobody
+
+EXPOSE $SERVER_PORT/tcp $SERVER_PORT/udp
+
+CMD ss-server -s $SERVER_ADDR \
+              -p $SERVER_PORT \
+              -k ${PASSWORD:-$(hostname)} \
+              -m $METHOD \
+              -t $TIMEOUT \
+              --fast-open \
+              -d $DNS_ADDR \
+              -d $DNS_ADDR_2 \
+              -u \
+              $ARGS
