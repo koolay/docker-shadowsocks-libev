@@ -1,0 +1,13 @@
+{ 
+    "server":"127.0.0.1",
+    "server_port":1234,
+    "local_port":1080,
+    "password":"dev", 
+    "timeout":600,
+    "method":"chacha20", 
+    "protocol":"auth_aes128_md5", 
+    "obfs":"tls1.2_ticket_auth", 
+    "obfsparam":"" ,
+    "group":"ssr",
+    "local_address":"0.0.0.0"
+}
